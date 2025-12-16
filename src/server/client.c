@@ -20,7 +20,9 @@ int process_command(client_t* self, const char* buffer) {
   }
 
   if (!stricmp(cmd, "PWD")) {
-    send_response_fmt(self->socket_fd, "257", "\"%s\" is the current directory", self->cwd);
+    char relative[512];
+    get_user_cwd_relative(self, relative);
+    send_response_fmt(self->socket_fd, "257", "\"%s\" is the current directory", relative);
     return 0;
   }
 
@@ -31,6 +33,7 @@ int process_command(client_t* self, const char* buffer) {
     }
 
     handle_cwd_command(self, arg);
+    return 0;
   }
 
   if (!stricmp(cmd, "MKD")) {
@@ -62,25 +65,42 @@ int process_command(client_t* self, const char* buffer) {
 }
 
 void handle_cwd_command(client_t *self, char* arg) {
-  char new_cwd[PATH_MAX];
+  char candidate[PATH_MAX];
+  char resolved[PATH_MAX];
   struct stat st;
 
   if (strcmp(arg, "/") == 0) {
-    strncpy(self->cwd, self->home_dir, sizeof(self->cwd));
-    send_response(self->socket_fd, "250", "Directory changed to root");
-    return;
+      strncpy(self->cwd, self->home_dir, sizeof(self->cwd));
+      self->cwd[sizeof(self->cwd) - 1] = '\0';
+      send_response(self->socket_fd, "250", "Directory changed to /");
+      return;
   }
 
-
-  if (stat(new_cwd, &st) < 0 || !S_ISDIR(st.st_mode)) {
-    send_response(self->socket_fd, "550", "Not a directory");
-    return;
+  if (arg[0] == '/') {
+    snprintf(candidate, sizeof(candidate), "%s%s", self->home_dir, arg);
+  } else {     
+    snprintf(candidate, sizeof(candidate), "%s/%s", self->cwd, arg);
   }
 
-  strncpy(self->cwd, new_cwd, sizeof(self->cwd));
+  if (!realpath(candidate, resolved)) {
+      send_response(self->socket_fd, "550", "Failed to change directory");
+      return;
+  }
+
+  if (strncmp(resolved, self->home_dir, strlen(self->home_dir)) != 0) {
+      send_response(self->socket_fd, "550", "Permission denied");
+      return;
+  }
+
+  if (stat(resolved, &st) < 0 || !S_ISDIR(st.st_mode)) {
+      send_response(self->socket_fd, "550", "Not a directory");
+      return;
+  }
+
+  strncpy(self->cwd, resolved, sizeof(self->cwd));
   self->cwd[sizeof(self->cwd) - 1] = '\0';
 
-  send_response(self->socket_fd, "250", "Directory changed");
+  send_response(self->socket_fd, "250", "Directory successfully changed");
 }
 
 void terminate_connection(client_t *self) {

@@ -84,6 +84,9 @@ int main() {
   
   user_table_t* user_table = malloc(sizeof(user_table_t));
   init_user_table(user_table);
+  //for testing only
+  add_user("test", "123", user_table);
+
   pthread_t console_thread;
   if (pthread_create(&console_thread, NULL, console_manager_thread, user_table) < 0) {
     perror("Error creating console manager thread.\n");
