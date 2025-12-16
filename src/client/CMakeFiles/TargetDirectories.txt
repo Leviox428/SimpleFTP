@@ -1,0 +1,8 @@
+/home/dvorsky23/Semestralka/src/client/CMakeFiles/edit_cache.dir
+/home/dvorsky23/Semestralka/src/client/CMakeFiles/rebuild_cache.dir
+/home/dvorsky23/Semestralka/src/client/server/CMakeFiles/server.dir
+/home/dvorsky23/Semestralka/src/client/server/CMakeFiles/edit_cache.dir
+/home/dvorsky23/Semestralka/src/client/server/CMakeFiles/rebuild_cache.dir
+/home/dvorsky23/Semestralka/src/client/client/CMakeFiles/client.dir
+/home/dvorsky23/Semestralka/src/client/client/CMakeFiles/edit_cache.dir
+/home/dvorsky23/Semestralka/src/client/client/CMakeFiles/rebuild_cache.dir

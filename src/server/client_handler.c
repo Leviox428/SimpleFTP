@@ -44,7 +44,6 @@ user_t* handle_connection(client_t *client, user_table_t *user_table, active_cli
     }
     break;
   }
-  send_response(client->socket_fd, "230", "User logged in, proceed");
   return user;
 }
 
@@ -62,10 +61,9 @@ void* handle_client(void* arg) {
   
   snprintf(client_arg->client->cwd, sizeof(client_arg->client->cwd), "%s/%s", client_arg->ftp_root, user->username);
   client_arg->client->cwd[sizeof(client_arg->client->cwd)-1] = '\0';
-
-  snprintf(client_arg->client->home_dir, sizeof(client_arg->client->home_dir), "%s/%s", client_arg->ftp_root, user->username);
-  client_arg->client->home_dir[sizeof(client_arg->client->home_dir)-1] = '\0';
-
+  
+  strcpy(client_arg->client->home_dir, client_arg->client->cwd);
+  
   struct stat st = {0};
   if (stat(client_arg->client->home_dir, &st) == -1) {
     if (mkdir(client_arg->client->home_dir, 0755) == -1) {
@@ -75,6 +73,8 @@ void* handle_client(void* arg) {
       return NULL;
     }
   }
+
+  send_response(client_arg->client->socket_fd, "230", "User logged in, proceed");
 
   char buffer[512];
   while (!client_arg->shutdown_requested) {

@@ -50,13 +50,15 @@ int client_connect(int control_fd){
 
 void client_loop(int control_fd) {
   
-  char buffer[510];
+  char send_buffer[510];
+  char receive_buffer[512];
   while (1) {
     printf("> ");
-    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-      send_line(control_fd, buffer);
+    if (fgets(send_buffer, sizeof(send_buffer), stdin) != NULL) {
+      printf("%s", send_buffer);
+      send_line(control_fd, send_buffer);
     }   
-    if (!recieve_line(control_fd, buffer, sizeof(buffer)))
+    if (!recieve_line(control_fd, receive_buffer, sizeof(receive_buffer)))
       return;
   }  
 }

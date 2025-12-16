@@ -37,7 +37,6 @@ int receive_line(client_t* client, char* buffer, size_t buffer_size) {
   }
 
   buffer[total] = '\0';
-  printf("%s\n", buffer);
   return 1;
 }
 
@@ -62,27 +61,6 @@ int strincmp(const char *a, const char *b, size_t n) {
   if (i < n) {
     return *a - *b;
   }
-  return 0;
-}
-
-int resolve_path(client_t *client, const char *arg, char *out, size_t out_size) {
-  char tmp[PATH_MAX];
-
-  if (arg[0] == '/') {
-    snprintf(tmp, sizeof(tmp), "%s%s", client->home_dir, arg);
-  } else {
-    snprintf(tmp, sizeof(tmp), "%s/%s", client->cwd, arg);
-  }
-
-  if (!realpath(tmp, out)) {
-    return -1;
-  }
-  
-  // ensure path stays in home_dir
-  if (strncmp(out, client->home_dir, strlen(client->home_dir)) != 0) {
-    return -1;
-  }
-
   return 0;
 }
 
