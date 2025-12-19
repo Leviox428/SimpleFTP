@@ -113,7 +113,6 @@ int main() {
     if (!client) {
       perror("Malloc client failed.\n");
       close(client_fd);
-      free(client);
       continue;
     }
 

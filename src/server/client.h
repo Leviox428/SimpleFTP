@@ -22,6 +22,8 @@ typedef struct {
 int process_command(client_t* self, const char* recieve_buffer);
 void terminate_connection(client_t* self);
 void handle_cwd_command(client_t* self, char* arg);
+void handle_rmd_command(client_t* self, char* arg);
+void handle_dele_command(client_t* self, char* arg);
 void get_user_cwd_relative(client_t* self, char* relative);
 
 #endif 

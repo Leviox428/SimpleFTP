@@ -1,3 +1,5 @@
+#include <asm-generic/errno-base.h>
+#include <asm-generic/errno.h>
 #include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +9,7 @@
 #include <sys/stat.h>
 #include "client.h"
 #include "ftp_utils.h"
+#include <errno.h>
 
 int process_command(client_t* self, const char* buffer) {
   char cmd[16] = {0};
@@ -60,8 +63,54 @@ int process_command(client_t* self, const char* buffer) {
     return 0;
   }
 
+  if (!stricmp(cmd, "RMD")) {
+    if (arg[0] == '\0') {
+      send_response(self->socket_fd, "550", "RMD requires a directory name argument");
+      return 0;
+    } 
+    handle_rmd_command(self, arg);
+    return 0;
+  }
+
+  if (!stricmp(cmd, "DELE")) {
+    if (arg[0] == '\0') {
+      send_response(self->socket_fd, "550", "DELE requires a file name argument");
+      return 0;
+    }
+    handle_dele_command(self, arg);
+    return 0;
+  }
+
   send_response(self->socket_fd, "550", "Unknown command");
   return 0;
+}
+
+void handle_rmd_command(client_t *self, char *arg) {
+  char deleted_dir_path[PATH_MAX];
+  snprintf(deleted_dir_path, sizeof(deleted_dir_path), "%s/%s", self->cwd, arg);
+
+  struct stat st = {0};
+  if (stat(deleted_dir_path, &st) == - 1) {
+    send_response_fmt(self->socket_fd, "550", "Directory %s doesn't exist", arg);
+    return;
+  }
+
+  if (!S_ISDIR(st.st_mode)) {
+    send_response(self->socket_fd, "550", "Not a directory");
+    return;
+  }
+
+  if (rmdir(deleted_dir_path) == -1) {
+    if (errno == ENOTEMPTY || errno == EEXIST) {
+      send_response(self->socket_fd, "550", "Directory not empty");
+    } else {
+      perror("Rmdir failed");
+    }
+    return;
+  }
+    
+  send_response_fmt(self->socket_fd, "257", "Directory %s was removed", arg);
+  return;
 }
 
 void handle_cwd_command(client_t *self, char* arg) {
