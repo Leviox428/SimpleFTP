@@ -5,12 +5,15 @@
 #include <stddef.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 typedef struct {
   int socket_fd;
   struct sockaddr_in ctrl_addr;
-
+  
+  time_t pasv_created;
   int pasv_fd;
+
   int data_fd;
   int logged_in;
 

@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "client.h"
+#include "data_transfer.h"
 #include "ftp_utils.h"
 #include <errno.h>
 
@@ -87,6 +88,10 @@ int process_command(client_t* self, const char* buffer) {
   }
   
   if (!stricmp(cmd, "LIST")) {
+    if (self->pasv_fd == -1) {
+      send_response(self->socket_fd, "550", "Pasv socket not listening use PASV first");
+      return 0;
+    }
     handle_list_command(self);
     return 0;
   }
@@ -234,11 +239,35 @@ void handle_pasv_command(client_t *self) {
     ip & 0xFF,
     p1, p2);
 
+  self->pasv_created = time(NULL);
+
   out:
     pthread_mutex_unlock(&self->mutex);
 }
 
 void handle_list_command(client_t *self) {
+  
+  pthread_mutex_lock(&self->mutex);
+  if (self->transfer_active) {
+    send_response(self->socket_fd, "550", "You must wait for other transfer to end");
+    goto out;
+  }
+
+  self->transfer_active = 1;
+  int data_fd = open_data_transfer(self);
+  if (data_fd == -1) {
+    send_response(self->socket_fd, "550", "Couldnt start data transfer");
+    self->transfer_active = 0;
+    goto out;
+  }
+  
+  pthread_t list_thread;
+  pthread_create(&list_thread, NULL, list_transfer, self);
+  pthread_detach(list_thread);
+
+  out:
+    pthread_mutex_unlock(&self->mutex);
+
 }
 
 void terminate_connection(client_t *self) {

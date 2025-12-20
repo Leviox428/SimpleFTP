@@ -34,3 +34,9 @@ void close_data_transfer(client_t *client) {
   client->transfer_active = 0;
   pthread_mutex_unlock(&client->mutex);
 }
+
+void* list_transfer(void* arg) {
+
+  return NULL;
+}
+

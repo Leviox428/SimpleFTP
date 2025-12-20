@@ -24,12 +24,22 @@ void handle_sigint(int sig) {
 
 void* scan_clients(void* arg) {
   active_client_registry_t* client_registry = (active_client_registry_t*)arg;
+  if (!client_registry) return NULL;
   while (!shutdown_requested) {
-    sleep(30);
+    sleep(20);
+    time_t now = time(NULL);
     pthread_mutex_lock(&client_registry->mutex);
     for (int i = 0; i < client_registry->count; i++) {
       client_t* client = client_registry->clients[i];
+      pthread_mutex_lock(&client->mutex);
+      if (client->pasv_fd != -1 &&
+        difftime(now, client->pasv_created) > 60) {        
+        close(client->pasv_fd);
+        client->pasv_fd = -1;
+      }
+      pthread_mutex_unlock(&client->mutex);
     }
+    pthread_mutex_unlock(&client_registry->mutex);
   }
   return NULL;
 }
@@ -92,7 +102,6 @@ int main() {
 
   printf("FTP server listening on port 2121...\n");
   printf("FTP root is: %s\n", ftp_root);
-  fflush(stdout);
   
   user_table_t* user_table = malloc(sizeof(user_table_t));
   init_user_table(user_table);
@@ -102,6 +111,8 @@ int main() {
   pthread_t console_thread;
   if (pthread_create(&console_thread, NULL, console_manager_thread, user_table) < 0) {
     perror("Error creating console manager thread.\n");
+    clear_user_table(user_table);
+    free(user_table);
     close(server_fd);
     free(ftp_root);
     return 6;
@@ -110,6 +121,19 @@ int main() {
   
   active_client_registry_t* client_registry = malloc(sizeof(active_client_registry_t));
   init_client_registry(client_registry);
+  
+  pthread_t scanner_thread;
+  if (pthread_create(&scanner_thread, NULL, scan_clients, client_registry) < 0) {
+    perror("Error creating scanner thread.\n");
+    clear_user_table(user_table);
+    free(user_table);
+    clear_client_registry(client_registry);
+    free(client_registry);
+    close(server_fd);
+    free(ftp_root);
+    return 7;
+  }
+
   while (!shutdown_requested) {
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);

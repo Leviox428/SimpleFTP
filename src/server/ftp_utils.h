@@ -3,11 +3,13 @@
 
 #include "client.h"
 #include <stddef.h>
+#include <sys/types.h>
 
 #define CONTROL_BUFFER_SIZE 512
 
 void send_response(int socket_fd, const char* code, const char* response);
 void send_response_fmt(int sockfd, const char *code, const char *fmt, ...);
+void format_permissions(mode_t mode, char* permissions);
 int receive_line(client_t* client, char* buffer, size_t buffer_size);
 int stricmp(const char* a, const char* b);
 int strincmp(const char* a, const char*b, size_t n);

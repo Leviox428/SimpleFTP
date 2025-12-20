@@ -2,7 +2,9 @@
 #define DATA_TRANSFER_H
 
 #include "client.h"
+
 int open_data_transfer(client_t* client);
 void close_data_transfer(client_t* client);
+void* list_transfer(void* arg);
 
 #endif
