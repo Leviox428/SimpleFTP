@@ -4,6 +4,7 @@
 #include "client.h"
 #include <stddef.h>
 
+#define CONTROL_BUFFER_SIZE 512
 
 void send_response(int socket_fd, const char* code, const char* response);
 void send_response_fmt(int sockfd, const char *code, const char *fmt, ...);

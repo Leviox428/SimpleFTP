@@ -1,6 +1,6 @@
-#include <asm-generic/errno-base.h>
-#include <asm-generic/errno.h>
 #include <linux/limits.h>
+#include <pthread.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +18,7 @@ int process_command(client_t* self, const char* buffer) {
   sscanf(buffer, "%15s %495[^\r\n]", cmd, arg);
 
   if (!stricmp(cmd, "QUIT")) {
-    send_response(self->socket_fd, "502", "Goodbye");
+    send_response(self->socket_fd, "221", "Goodbye");
     return 1;
   }
 
@@ -81,6 +81,16 @@ int process_command(client_t* self, const char* buffer) {
     return 0;
   }
 
+  if (!stricmp(cmd, "PASV")) {
+    handle_pasv_command(self);
+    return 0;
+  }
+  
+  if (!stricmp(cmd, "LIST")) {
+    handle_list_command(self);
+    return 0;
+  }
+
   send_response(self->socket_fd, "550", "Unknown command");
   return 0;
 }
@@ -109,7 +119,7 @@ void handle_rmd_command(client_t *self, char *arg) {
     return;
   }
     
-  send_response_fmt(self->socket_fd, "257", "Directory %s was removed", arg);
+  send_response_fmt(self->socket_fd, "250", "Directory %s was removed", arg);
   return;
 }
 
@@ -150,6 +160,85 @@ void handle_cwd_command(client_t *self, char* arg) {
   self->cwd[sizeof(self->cwd) - 1] = '\0';
 
   send_response(self->socket_fd, "250", "Directory successfully changed");
+}
+
+void handle_dele_command(client_t *self, char *arg) {
+  char deleted_file_path[PATH_MAX];
+  snprintf(deleted_file_path, sizeof(deleted_file_path), "%s/%s", self->cwd, arg);
+  
+  if (unlink(deleted_file_path) == -1) {
+    if (errno == ENOENT) {
+      send_response_fmt(self->socket_fd, "550", "File %s doesn't exist", arg);
+    } else if (errno == EACCES) {
+      send_response(self->socket_fd, "550", "Permission denied");
+    } else if (errno == EISDIR) {
+      send_response(self->socket_fd, "550", "Tried to delete a folder use RMD instead");
+    } else if (errno == EBUSY) {
+      send_response(self->socket_fd, "550", "File in use");
+    }
+    return;
+  }
+  send_response_fmt(self->socket_fd, "250", "File %s was deleted", arg);
+}
+
+void handle_pasv_command(client_t *self) {
+  pthread_mutex_lock(&self->mutex);
+  if (self->pasv_fd != -1) {
+    close(self->pasv_fd);
+    self->pasv_fd = -1;
+  }
+
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (fd < 0) {
+    send_response(self->socket_fd, "425", "Can't open passive connection");
+    goto out;
+  }
+
+  int opt = 1;
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr = self->ctrl_addr.sin_addr;
+  addr.sin_port = 0;
+
+  if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    close(fd);
+    send_response(self->socket_fd, "425", "Can't bind passive socket");
+    goto out;
+  }
+
+  if (listen(fd, 1) < 0) {
+    close(fd);
+    send_response(self->socket_fd, "425", "Can't listen on passive socket");
+    goto out;
+  }
+
+  socklen_t len = sizeof(addr);
+  getsockname(fd, (struct sockaddr *)&addr, &len);
+
+  uint16_t port = ntohs(addr.sin_port);
+  uint32_t ip = ntohl(addr.sin_addr.s_addr);
+
+  int p1 = port / 256;
+  int p2 = port % 256;
+
+  self->pasv_fd = fd;
+
+  send_response_fmt(self->socket_fd, "227",
+    "Entering Passive Mode (%d,%d,%d,%d,%d,%d)",
+    (ip >> 24) & 0xFF,
+    (ip >> 16) & 0xFF,
+    (ip >> 8)  & 0xFF,
+    ip & 0xFF,
+    p1, p2);
+
+  out:
+    pthread_mutex_unlock(&self->mutex);
+}
+
+void handle_list_command(client_t *self) {
 }
 
 void terminate_connection(client_t *self) {

@@ -22,6 +22,18 @@ void handle_sigint(int sig) {
   shutdown_requested = 1;
 } 
 
+void* scan_clients(void* arg) {
+  active_client_registry_t* client_registry = (active_client_registry_t*)arg;
+  while (!shutdown_requested) {
+    sleep(30);
+    pthread_mutex_lock(&client_registry->mutex);
+    for (int i = 0; i < client_registry->count; i++) {
+      client_t* client = client_registry->clients[i];
+    }
+  }
+  return NULL;
+}
+
 int main() {
   struct sigaction sa = {0};
   sa.sa_handler = handle_sigint;
@@ -118,6 +130,9 @@ int main() {
 
     client->logged_in = 0;
     client->socket_fd = client_fd;
+    client->ctrl_addr = client_addr;
+    client->data_fd = -1;
+    client->pasv_fd = -1;
 
     client_thread_arg_t client_thread_arg;
     client_thread_arg.client_registry = client_registry;

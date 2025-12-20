@@ -9,13 +9,13 @@
 #include <sys/socket.h>
 
 void send_response(int socket_fd, const char *code, const char *response) {
-  char buffer[512];
+  char buffer[CONTROL_BUFFER_SIZE];
   snprintf(buffer, sizeof(buffer), "%s %s\r\n", code, response);
   send(socket_fd, buffer, strlen(buffer), 0);
 }
 
 void send_response_fmt(int socket_fd, const char *code, const char *fmt, ...) {
-  char buffer[512];
+  char buffer[CONTROL_BUFFER_SIZE];
   va_list args;
 
   va_start(args, fmt);
