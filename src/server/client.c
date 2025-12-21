@@ -101,6 +101,8 @@ int process_command(client_t* self, const char* buffer) {
 }
 
 void handle_rmd_command(client_t *self, char *arg) {
+  //control read, data read -> no mutex
+
   char deleted_dir_path[PATH_MAX];
   snprintf(deleted_dir_path, sizeof(deleted_dir_path), "%s/%s", self->cwd, arg);
 
@@ -129,22 +131,28 @@ void handle_rmd_command(client_t *self, char *arg) {
 }
 
 void handle_cwd_command(client_t *self, char* arg) {
+  //control write, data read -> mutex
+
   char candidate[PATH_MAX];
   char resolved[PATH_MAX];
   struct stat st;
 
   if (strcmp(arg, "/") == 0) {
-      strncpy(self->cwd, self->home_dir, sizeof(self->cwd));
-      self->cwd[sizeof(self->cwd) - 1] = '\0';
-      send_response(self->socket_fd, "250", "Directory changed to /");
-      return;
+    pthread_mutex_lock(&self->mutex);
+    strncpy(self->cwd, self->home_dir, sizeof(self->cwd));
+    self->cwd[sizeof(self->cwd) - 1] = '\0';
+    pthread_mutex_unlock(&self->mutex);
+    send_response(self->socket_fd, "250", "Directory changed to /");
+    return;
   }
-
+  
+  pthread_mutex_lock(&self->mutex);
   if (arg[0] == '/') {
     snprintf(candidate, sizeof(candidate), "%s%s", self->home_dir, arg);
   } else {     
     snprintf(candidate, sizeof(candidate), "%s/%s", self->cwd, arg);
   }
+  pthread_mutex_unlock(&self->mutex);
 
   if (!realpath(candidate, resolved)) {
       send_response(self->socket_fd, "550", "Failed to change directory");
@@ -160,9 +168,11 @@ void handle_cwd_command(client_t *self, char* arg) {
       send_response(self->socket_fd, "550", "Not a directory");
       return;
   }
-
+  
+  pthread_mutex_lock(&self->mutex);
   strncpy(self->cwd, resolved, sizeof(self->cwd));
   self->cwd[sizeof(self->cwd) - 1] = '\0';
+  pthread_mutex_lock(&self->mutex);
 
   send_response(self->socket_fd, "250", "Directory successfully changed");
 }
@@ -188,15 +198,23 @@ void handle_dele_command(client_t *self, char *arg) {
 
 void handle_pasv_command(client_t *self) {
   pthread_mutex_lock(&self->mutex);
+  if (self->transfer_active) {
+    send_response(self->socket_fd, "550", "Can't open another PASV socket while other transfer is active");
+    return;
+  }
+  pthread_mutex_unlock(&self->mutex);
+  
+  //no transfer active, no need for mutex
+
   if (self->pasv_fd != -1) {
     close(self->pasv_fd);
     self->pasv_fd = -1;
   }
-
+  
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
     send_response(self->socket_fd, "425", "Can't open passive connection");
-    goto out;
+    return;
   }
 
   int opt = 1;
@@ -211,13 +229,13 @@ void handle_pasv_command(client_t *self) {
   if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
     close(fd);
     send_response(self->socket_fd, "425", "Can't bind passive socket");
-    goto out;
+    return;
   }
 
   if (listen(fd, 1) < 0) {
     close(fd);
     send_response(self->socket_fd, "425", "Can't listen on passive socket");
-    goto out;
+    return;
   }
 
   socklen_t len = sizeof(addr);
@@ -240,49 +258,41 @@ void handle_pasv_command(client_t *self) {
     p1, p2);
 
   self->pasv_created = time(NULL);
-
-  out:
-    pthread_mutex_unlock(&self->mutex);
 }
 
 void handle_list_command(client_t *self) {
-  
+  //control write, data read ->mutex
+
   pthread_mutex_lock(&self->mutex);
   if (self->transfer_active) {
     send_response(self->socket_fd, "550", "You must wait for other transfer to end");
-    goto out;
+    pthread_mutex_unlock(&self->mutex);
+    return;
   }
 
   self->transfer_active = 1;
-  int data_fd = open_data_transfer(self);
-  if (data_fd == -1) {
-    send_response(self->socket_fd, "550", "Couldnt start data transfer");
-    self->transfer_active = 0;
-    goto out;
-  }
+  pthread_mutex_unlock(&self->mutex);
   
   pthread_t list_thread;
   pthread_create(&list_thread, NULL, list_transfer, self);
   pthread_detach(list_thread);
-
-  out:
-    pthread_mutex_unlock(&self->mutex);
-
 }
 
 void terminate_connection(client_t *self) {
-  shutdown(self->socket_fd, SHUT_RDWR);
   close(self->socket_fd);
   free(self);
 }
 
 void get_user_cwd_relative(client_t *self, char *relative) {
+  pthread_mutex_lock(&self->mutex);
   if (strcmp(self->cwd, self->home_dir) == 0) {
     strcpy(relative, "/");
+    pthread_mutex_unlock(&self->mutex);
     return;
   }
 
   const char* rel = self->cwd + strlen(self->home_dir);
+  pthread_mutex_unlock(&self->mutex);
   if (*rel == '\0') {
     strcpy(relative, "/");
     return;

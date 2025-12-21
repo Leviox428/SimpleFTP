@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include "ftp_utils.h"
 #include <sys/socket.h>
@@ -62,5 +63,21 @@ int strincmp(const char *a, const char *b, size_t n) {
     return *a - *b;
   }
   return 0;
+}
+
+void format_permissions(mode_t mode, char *permissions) {
+  permissions[0] = S_ISDIR(mode) ? 'd' :
+           S_ISLNK(mode) ? 'l' : '-';
+
+  permissions[1] = (mode & S_IRUSR) ? 'r' : '-';
+  permissions[2] = (mode & S_IWUSR) ? 'w' : '-';
+  permissions[3] = (mode & S_IXUSR) ? 'x' : '-';
+  permissions[4] = (mode & S_IRGRP) ? 'r' : '-';
+  permissions[5] = (mode & S_IWGRP) ? 'w' : '-';
+  permissions[6] = (mode & S_IXGRP) ? 'x' : '-';
+  permissions[7] = (mode & S_IROTH) ? 'r' : '-';
+  permissions[8] = (mode & S_IWOTH) ? 'w' : '-';
+  permissions[9] = (mode & S_IXOTH) ? 'x' : '-';
+  permissions[10] = '\0';
 }
 

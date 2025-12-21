@@ -44,7 +44,14 @@ void* scan_clients(void* arg) {
   return NULL;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+  int port = 2121;
+  char* root = "users";
+  if (argc == 3) {
+    port = atoi(argv[1]);
+    root = argv[2];
+  }
+
   struct sigaction sa = {0};
   sa.sa_handler = handle_sigint;
   sigemptyset(&sa.sa_mask);
@@ -64,7 +71,7 @@ int main() {
     return 2;
   }
 
-  snprintf(ftp_root, PATH_MAX, "%s/Semestralka/users", pw->pw_dir);
+  snprintf(ftp_root, PATH_MAX, "%s/Semestralka/%s", pw->pw_dir, root);
 
   //creates TCP IPv4 socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -83,7 +90,7 @@ int main() {
 
   server_addr.sin_family = AF_INET;
   server_addr.sin_addr.s_addr = INADDR_ANY;
-  server_addr.sin_port = htons(2121);
+  server_addr.sin_port = htons(port);
 
   if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
     perror("binding socket to the port failed");

@@ -11,14 +11,14 @@ typedef struct {
   int socket_fd;
   struct sockaddr_in ctrl_addr;
   
-  time_t pasv_created;
-  int pasv_fd;
+  time_t pasv_created; //control write
+  int pasv_fd; //control write
 
-  int data_fd;
+  int data_fd; //data write/read
   int logged_in;
 
-  char cwd[PATH_MAX];
-  char home_dir[PATH_MAX];
+  char cwd[PATH_MAX]; //control write/read, data read
+  char home_dir[PATH_MAX]; //control write/read;
 
   int transfer_active;
   pthread_mutex_t mutex;
