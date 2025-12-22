@@ -10,6 +10,7 @@
 #include "client.h"
 #include "data_transfer.h"
 #include "ftp_utils.h"
+#include <fcntl.h>
 #include <errno.h>
 
 int process_command(client_t* self, const char* buffer) {
@@ -93,6 +94,21 @@ int process_command(client_t* self, const char* buffer) {
       return 0;
     }
     handle_list_command(self);
+    return 0;
+  }
+
+  if (!stricmp(cmd, "RETR")) {
+     if (arg[0] == '\0') {
+      send_response(self->socket_fd, "550", "RETR requires a file name argument");
+      return 0;
+    } 
+
+    if (self->pasv_fd == -1) {
+      send_response(self->socket_fd, "550", "Pasv socket not listening use PASV first");
+      return 0;
+    }
+
+    handle_retr_command(self, arg);
     return 0;
   }
 
@@ -278,6 +294,45 @@ void handle_list_command(client_t *self) {
   pthread_detach(list_thread);
 }
 
+void handle_retr_command(client_t *self, char *file_name) {
+  char file_path[PATH_MAX];
+  
+  pthread_mutex_lock(&self->mutex);
+  if (self->transfer_active) {
+    send_response(self->socket_fd, "550", "You must wait for other transfer to end");
+    pthread_mutex_unlock(&self->mutex);
+    return;
+  }
+  pthread_mutex_unlock(&self->mutex);
+
+  snprintf(file_path, sizeof(file_path), "%s/%s", self->cwd, file_name);
+
+  struct stat st;
+  if (stat(file_path, &st) < 0 || !S_ISREG(st.st_mode)) {
+    send_response(self->socket_fd, "550", "File not found or is a dir");
+    return;
+  }
+
+  int fd = open(file_path, O_RDONLY);
+  if (fd < 0) {
+    send_response(self->socket_fd, "550", "File not available");
+    return;
+  }
+
+  pthread_mutex_lock(&self->mutex);
+  self->transfer_active = 1;
+  self->file_fd = fd;
+  pthread_mutex_unlock(&self->mutex);
+
+  pthread_t retr_thread;
+  file_transfer_arg_t* file_arg = malloc(sizeof(file_transfer_arg_t));
+  strcpy(file_arg->file_path, file_path);
+  file_arg->client = self;
+
+  pthread_create(&retr_thread, NULL, retr_transfer, file_arg);
+  pthread_detach(retr_thread);
+}
+
 void terminate_connection(client_t *self) {
   close(self->socket_fd);
   free(self);
@@ -299,5 +354,3 @@ void get_user_cwd_relative(client_t *self, char *relative) {
   }
   strcpy(relative, rel);
 }
-
-

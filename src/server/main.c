@@ -122,11 +122,7 @@ int main(int argc, char* argv[]) {
 
   if (pthread_create(&console_thread, NULL, console_manager_thread, c_arg) < 0) {
     perror("Error creating console manager thread.\n");
-    clear_user_table(user_table);
-    free(user_table);
-    close(server_fd);
-    free(ftp_root);
-    return 6;
+    goto cleanup;
   }
   pthread_detach(console_thread);
   
@@ -136,13 +132,7 @@ int main(int argc, char* argv[]) {
   pthread_t scanner_thread;
   if (pthread_create(&scanner_thread, NULL, scan_clients, client_registry) < 0) {
     perror("Error creating scanner thread.\n");
-    clear_user_table(user_table);
-    free(user_table);
-    clear_client_registry(client_registry);
-    free(client_registry);
-    close(server_fd);
-    free(ftp_root);
-    return 7;
+    goto cleanup;
   }
 
   while (!shutdown_requested) {
@@ -168,15 +158,17 @@ int main(int argc, char* argv[]) {
     client->ctrl_addr = client_addr;
     client->data_fd = -1;
     client->pasv_fd = -1;
+    client->file_fd = -1;
+    client->abort_requested = 0;
 
-    client_thread_arg_t client_thread_arg;
-    client_thread_arg.client_registry = client_registry;
-    client_thread_arg.user_table = user_table;
-    client_thread_arg.client = client;
-    client_thread_arg.ftp_root = ftp_root;
+    client_thread_arg_t* client_thread_arg = malloc(sizeof(client_thread_arg_t));
+    client_thread_arg->client_registry = client_registry;
+    client_thread_arg->user_table = user_table;
+    client_thread_arg->client = client;
+    client_thread_arg->ftp_root = ftp_root;
 
     pthread_t tid;
-    if (pthread_create(&tid, NULL, handle_client, &client_thread_arg) < 0) {
+    if (pthread_create(&tid, NULL, handle_client, client_thread_arg) < 0) {
       perror("Client pthread_create failed.\n");
       close(client_fd);
       free(client);
@@ -186,12 +178,15 @@ int main(int argc, char* argv[]) {
     pthread_detach(tid);
   }
 
-  clear_client_registry(client_registry);
-  free(client_registry);
-  clear_user_table(user_table);
-  free(user_table);
-  close(server_fd);
-  free(ftp_root);
+  cleanup:
+    if (client_registry) {
+      clear_client_registry(client_registry);
+      free(client_registry);
+    }    
+    clear_user_table(user_table);
+    free(user_table);
+    close(server_fd);
+    free(ftp_root);
 
   return 0;
 }

@@ -2,6 +2,7 @@
 #define CLIENT_H
 
 #include <linux/limits.h>
+#include <signal.h>
 #include <stddef.h>
 #include <pthread.h>
 #include <arpa/inet.h>
@@ -15,12 +16,15 @@ typedef struct {
   int pasv_fd; //control write
 
   int data_fd; //data write/read
+  int file_fd;
+
   int logged_in;
 
   char cwd[PATH_MAX]; //control write/read, data read
   char home_dir[PATH_MAX]; //control write/read;
 
   int transfer_active;
+  volatile sig_atomic_t abort_requested;
   pthread_mutex_t mutex;
 
 } client_t;
@@ -33,5 +37,6 @@ void handle_dele_command(client_t* self, char* arg);
 void handle_list_command(client_t* self);
 void handle_pasv_command(client_t* self);
 void get_user_cwd_relative(client_t* self, char* relative);
+void handle_retr_command(client_t* self, char* file_name);
 
 #endif 

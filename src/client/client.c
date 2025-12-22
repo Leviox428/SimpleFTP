@@ -2,11 +2,13 @@
 #include "ftp_utils.h"
 #include <linux/limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>         
 #include <arpa/inet.h>      
 #include <netinet/in.h>
+#include <fcntl.h>
 
 int client_connect(int control_fd){
   char buffer[512];
@@ -52,10 +54,10 @@ int client_connect(int control_fd){
 
 void client_loop(int control_fd) {
   
-  client_t client = {0};
-  client.data_fd = -1;
-  client.transfer_active = 0;
-  client.control_fd = control_fd;
+  client_t* client = malloc(sizeof(client_t));
+  client->data_fd = -1;
+  client->transfer_active = 0;
+  client->control_fd = control_fd;
   
   char send_buffer[510];
   char receive_buffer[512];
@@ -65,23 +67,41 @@ void client_loop(int control_fd) {
       printf("%s", send_buffer);
       send_line(control_fd, send_buffer);
     }   
-    if (!recieve_line(control_fd, receive_buffer, sizeof(receive_buffer)))
+    if (!recieve_line(control_fd, receive_buffer, sizeof(receive_buffer))) {
+      free(client);
       return;
+    }
 
     if (strncmp(receive_buffer, "227", 3) == 0) {
-      handle_227(&client, receive_buffer);
+      handle_227(client, receive_buffer);
     }
 
     if (strncmp(receive_buffer, "150", 3) == 0) {
-      client.transfer_active = 1;
+      client->transfer_active = 1;
       
       if (strincmp("LIST", send_buffer, 4) == 0) {
-        client.output_fd = STDOUT_FILENO;
-        pthread_create(&client.data_thread, NULL, data_receive_thread, &client);
-        pthread_detach(client.data_thread);
+        client->output_fd = STDOUT_FILENO;
+        pthread_create(&client->data_thread, NULL, data_receive_thread, client);
+        pthread_detach(client->data_thread);
+        continue;
       }
 
       if (strincmp("RETR", send_buffer, 4) == 0) {
+
+        char *filename = NULL;
+        filename = send_buffer + strlen("RETR ");
+        char *nl = strchr(filename, '\n');
+        if (nl) *nl = '\0';
+
+        int output_fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (output_fd < 0) {
+          close_data_connection(client);
+          perror("Could not create a file");
+          continue;
+        }
+        pthread_create(&client->data_thread, NULL, data_receive_thread, client);
+        pthread_detach(client->data_thread);
+        continue;
       }
       
       if (strincmp("STOR", send_buffer, 4) == 0) {
@@ -101,7 +121,7 @@ int handle_227(client_t *client, const char *line) {
 
   struct sockaddr_in addr = {
     .sin_family = AF_INET,
-    .sin_port = htons(port)
+    .sin_port = htons(port) 
   };
 
   char ip[32];
@@ -123,7 +143,7 @@ int handle_227(client_t *client, const char *line) {
   return 0;
 }
 
-void *data_receive_thread(void *arg) {
+void* data_receive_thread(void* arg) {
   client_t* client = (client_t*)arg;
   char buffer[512];
   ssize_t n;
@@ -136,12 +156,15 @@ void *data_receive_thread(void *arg) {
   }
 
   if (client->output_fd != STDOUT_FILENO) close(client->output_fd);
- 
-  close(client->data_fd);
-
-  client->data_fd = -1;
-  client->transfer_active = 0;
+  
+  close_data_connection(client);
   recieve_line(client->control_fd, buffer, sizeof(buffer));
   return NULL;
+}
+
+void close_data_connection(client_t *self) {
+  close(self->data_fd);
+  self->data_fd = -1;
+  self->transfer_active = 0;
 }
 

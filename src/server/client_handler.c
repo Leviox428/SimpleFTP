@@ -4,6 +4,7 @@
 #include "ftp_utils.h"
 #include "user_table.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -53,8 +54,7 @@ void* handle_client(void* arg) {
   user_t* user = handle_connection(client_arg->client, client_arg->user_table, client_arg->client_registry);
   
   if (user == NULL) {
-    client_registry_remove(client_arg->client_registry, client_arg->client);
-    return NULL;
+    goto out;
   }
 
   client_arg->client->logged_in = 1;
@@ -69,8 +69,7 @@ void* handle_client(void* arg) {
     if (mkdir(client_arg->client->home_dir, 0755) == -1) {
       perror("mkdir failed");
       send_response(client_arg->client->socket_fd, "550", "Failed to create home directory");
-      client_registry_remove(client_arg->client_registry, client_arg->client);
-      return NULL;
+      goto out;
     }
   }
 
@@ -85,6 +84,8 @@ void* handle_client(void* arg) {
     if (user_quit)
       break;
   }
-
-  return NULL;
+  out:
+    client_registry_remove(client_arg->client_registry, client_arg->client);
+    free(client_arg);
+    return NULL;
 }

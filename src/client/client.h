@@ -20,5 +20,6 @@ int client_connect(int control_fd);
 void send_command(int fd, const char* cmd, const char* arg);
 int handle_227(client_t* client, const char* line);
 void *data_receive_thread(void *arg);
+void close_data_connection(client_t* self);
 #endif
 
