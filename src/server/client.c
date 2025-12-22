@@ -172,7 +172,7 @@ void handle_cwd_command(client_t *self, char* arg) {
   pthread_mutex_lock(&self->mutex);
   strncpy(self->cwd, resolved, sizeof(self->cwd));
   self->cwd[sizeof(self->cwd) - 1] = '\0';
-  pthread_mutex_lock(&self->mutex);
+  pthread_mutex_unlock(&self->mutex);
 
   send_response(self->socket_fd, "250", "Directory successfully changed");
 }

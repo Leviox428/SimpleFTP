@@ -116,7 +116,11 @@ int main(int argc, char* argv[]) {
   add_user("test", "123", user_table);
 
   pthread_t console_thread;
-  if (pthread_create(&console_thread, NULL, console_manager_thread, user_table) < 0) {
+  console_arg_t* c_arg = malloc(sizeof(console_arg_t));
+  c_arg->user_table = user_table;
+  c_arg->shutdown_requested = &shutdown_requested;
+
+  if (pthread_create(&console_thread, NULL, console_manager_thread, c_arg) < 0) {
     perror("Error creating console manager thread.\n");
     clear_user_table(user_table);
     free(user_table);

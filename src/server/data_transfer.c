@@ -24,6 +24,8 @@ int open_data_transfer(client_t* client) {
   if (data_fd < 0) return -1;
 
   client->data_fd = data_fd;
+  
+  send_response(client->socket_fd, "150", "Starting data transfer");
 
   return data_fd;  
 }
@@ -37,6 +39,8 @@ void close_data_transfer(client_t *client) {
   pthread_mutex_lock(&client->mutex);
   client->transfer_active = 0;
   pthread_mutex_unlock(&client->mutex);
+ 
+  send_response(client->socket_fd, "226", "Closing data connection");
 }
 
 void* list_transfer(void* arg) {
@@ -62,8 +66,6 @@ void* list_transfer(void* arg) {
     send_response(client->socket_fd, "550", "Couldn't open dir for listing");
     return NULL;
   }
-
-  send_response(client->socket_fd, "150", "Starting data transfer");
 
   struct dirent *ent;
   char fullpath[PATH_MAX];
@@ -98,6 +100,7 @@ void* list_transfer(void* arg) {
       if (write(data_fd, line, strlen(line)) < 0) break;
   }
   closedir(dir);
+  close_data_transfer(client);
   return NULL;
 }
 

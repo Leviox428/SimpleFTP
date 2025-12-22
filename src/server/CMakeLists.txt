@@ -6,6 +6,7 @@ add_executable(server
   active_client_registry.c
   console_manager.c
   user_table.c
+  data_transfer.c
 )
 
 target_link_libraries(server PRIVATE 
