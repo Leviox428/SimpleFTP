@@ -3,3 +3,7 @@ add_executable(client
   client.c
   ftp_utils.c
 )
+
+target_link_libraries(client PRIVATE
+  pthread
+)
