@@ -136,6 +136,7 @@ int process_command(client_t* self, const char* buffer) {
     }
 
     self->abort_requested = 1;
+    pthread_mutex_unlock(&self->mutex);
   }
 
   send_response(self->socket_fd, "550", "Unknown command");
@@ -242,16 +243,16 @@ void handle_pasv_command(client_t *self) {
   pthread_mutex_lock(&self->mutex);
   if (self->transfer_active) {
     send_response(self->socket_fd, "550", "Can't open another PASV socket while other transfer is active");
+    pthread_mutex_unlock(&self->mutex);
     return;
-  }
-  pthread_mutex_unlock(&self->mutex);
-  
-  //no transfer active, no need for mutex
+  }  
 
   if (self->pasv_fd != -1) {
     close(self->pasv_fd);
     self->pasv_fd = -1;
   }
+
+  pthread_mutex_unlock(&self->mutex);
   
   int fd = socket(AF_INET, SOCK_STREAM, 0);
   if (fd < 0) {
@@ -289,8 +290,6 @@ void handle_pasv_command(client_t *self) {
   int p1 = port / 256;
   int p2 = port % 256;
 
-  self->pasv_fd = fd;
-
   send_response_fmt(self->socket_fd, "227",
     "Entering Passive Mode (%d,%d,%d,%d,%d,%d)",
     (ip >> 24) & 0xFF,
@@ -299,7 +298,10 @@ void handle_pasv_command(client_t *self) {
     ip & 0xFF,
     p1, p2);
 
+  pthread_mutex_lock(&self->mutex);
+  self->pasv_fd = fd;
   self->pasv_created = time(NULL);
+  pthread_mutex_unlock(&self->mutex);
 }
 
 void handle_list_command(client_t *self) {

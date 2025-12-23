@@ -171,6 +171,7 @@ int main(int argc, char* argv[]) {
     client->pasv_fd = -1;
     client->file_fd = -1;
     client->abort_requested = 0;
+    pthread_mutex_init(&client->mutex, NULL);
 
     client_thread_arg_t* client_thread_arg = malloc(sizeof(client_thread_arg_t));
     client_thread_arg->client_registry = client_registry;

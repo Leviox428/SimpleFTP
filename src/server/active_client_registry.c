@@ -36,6 +36,7 @@ int client_registry_remove(active_client_registry_t *self, client_t* client) {
       self->clients[i] = self->clients[--self->count];
       pthread_mutex_unlock(&self->mutex);
       close(client->socket_fd);
+      pthread_mutex_destroy(&client->mutex);
       free(client);
       return 1;
     }

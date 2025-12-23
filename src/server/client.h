@@ -2,7 +2,6 @@
 #define CLIENT_H
 
 #include <linux/limits.h>
-#include <signal.h>
 #include <stddef.h>
 #include <pthread.h>
 #include <arpa/inet.h>
@@ -24,7 +23,8 @@ typedef struct {
   char home_dir[PATH_MAX]; //control write/read;
 
   int transfer_active;
-  volatile sig_atomic_t abort_requested;
+
+  int abort_requested;
   pthread_mutex_t mutex;
 
 } client_t;

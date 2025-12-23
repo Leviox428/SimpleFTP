@@ -3,6 +3,7 @@
 #include "client.h"
 #include "ftp_utils.h"
 #include "user_table.h"
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,17 +51,19 @@ user_t* handle_connection(client_t *client, user_table_t *user_table, active_cli
 
 void* handle_client(void* arg) {
   client_thread_arg_t* client_arg = (client_thread_arg_t*)arg;
-  client_registry_add(client_arg->client_registry, client_arg->client);
   user_t* user = handle_connection(client_arg->client, client_arg->user_table, client_arg->client_registry);
   
   if (user == NULL) {
     goto out;
   }
 
+  client_registry_add(client_arg->client_registry, client_arg->client);
   client_arg->client->logged_in = 1;
   
+  pthread_mutex_lock(&client_arg->client->mutex);
   snprintf(client_arg->client->cwd, sizeof(client_arg->client->cwd), "%s/%s", client_arg->ftp_root, user->username);
   client_arg->client->cwd[sizeof(client_arg->client->cwd)-1] = '\0';
+  pthread_mutex_unlock(&client_arg->client->mutex);
   
   strcpy(client_arg->client->home_dir, client_arg->client->cwd);
   

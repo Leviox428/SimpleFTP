@@ -13,10 +13,8 @@
 #include <grp.h>
 
 int open_data_transfer(client_t* client) {
-  pthread_mutex_lock(&client->mutex);
   int pasv_fd = client->pasv_fd;
   client->pasv_fd = -1;
-  pthread_mutex_unlock(&client->mutex);
 
   if (pasv_fd < 0) return -1;
   
@@ -83,6 +81,13 @@ void* list_transfer(void* arg) {
   char line[CONTROL_BUFFER_SIZE];
 
   while ((ent = readdir(dir)) != NULL) {
+    pthread_mutex_lock(&client->mutex);
+    if (client->abort_requested) {
+      pthread_mutex_unlock(&client->mutex);
+      break;
+    }
+    pthread_mutex_unlock(&client->mutex);
+
     if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, "..")) continue;
     
     snprintf(fullpath, sizeof(fullpath), "%s/%s", dir_path, ent->d_name);
@@ -145,15 +150,21 @@ void* retr_transfer(void* arg) {
   ssize_t n;
   
   while ((n = read(file_arg->client->file_fd, buf, sizeof(buf))) > 0) {
+    pthread_mutex_lock(&file_arg->client->mutex);
     if (file_arg->client->abort_requested) {
+      pthread_mutex_unlock(&file_arg->client->mutex);
       break;
     }
+    pthread_mutex_unlock(&file_arg->client->mutex);
 
     ssize_t sent = 0;
     while (sent < n) {
+      pthread_mutex_lock(&file_arg->client->mutex);
       if (file_arg->client->abort_requested) {
+        pthread_mutex_unlock(&file_arg->client->mutex);
         break;
       }
+      pthread_mutex_unlock(&file_arg->client->mutex);
 
       ssize_t w = write(data_fd, buf + sent, n - sent);
       if (w <= 0) {           
@@ -183,15 +194,21 @@ void* stor_transfer(void* arg) {
   ssize_t n;
 
   while ((n = read(data_fd, buf, sizeof(buf))) > 0) {
+    pthread_mutex_lock(&client->mutex);
     if (client->abort_requested) {
+      pthread_mutex_unlock(&client->mutex);
       break;
     }
+    pthread_mutex_unlock(&client->mutex);
 
     ssize_t written = 0;
     while (written < n) {
+      pthread_mutex_lock(&client->mutex);
       if (client->abort_requested) {
+        pthread_mutex_unlock(&client->mutex);
         break;
       }
+      pthread_mutex_unlock(&client->mutex);
 
       ssize_t w = write(client->file_fd, buf + written, n - written);
       if (w <= 0) {
