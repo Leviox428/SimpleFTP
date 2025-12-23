@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <stdatomic.h>
+#include <sys/stat.h>
 
 volatile sig_atomic_t shutdown_requested = 0;
 
@@ -73,12 +74,22 @@ int main(int argc, char* argv[]) {
 
   snprintf(ftp_root, PATH_MAX, "%s/Semestralka/%s", pw->pw_dir, root);
 
+  struct stat st = {0};
+  if (stat(ftp_root, &st) == -1) {
+    if (mkdir(ftp_root, 0755) == -1) {
+      perror("mkdir failed to create root folder");
+      free(ftp_root);
+      return 3;
+    }
+  }
+
+
   //creates TCP IPv4 socket
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
     perror("error creating main socket");
     free(ftp_root);
-    return 3;
+    return 4;
   }
   
   // can reuse port
@@ -96,7 +107,7 @@ int main(int argc, char* argv[]) {
     perror("binding socket to the port failed");
     close(server_fd);
     free(ftp_root);  
-    return 4;
+    return 5;
   }
   
   // sets main socket as passive
@@ -104,10 +115,10 @@ int main(int argc, char* argv[]) {
     perror("error setting main socket into passive mode");
     close(server_fd);
     free(ftp_root);
-    return 5;
+    return 6;
   }
 
-  printf("FTP server listening on port 2121...\n");
+  printf("FTP server listening on port %d...\n", port);
   printf("FTP root is: %s\n", ftp_root);
   
   user_table_t* user_table = malloc(sizeof(user_table_t));
@@ -146,7 +157,7 @@ int main(int argc, char* argv[]) {
       continue;
     }
 
-    client_t* client = malloc(sizeof(client_t));
+    client_t* client = calloc(1, sizeof(client_t));
     if (!client) {
       perror("Malloc client failed.\n");
       close(client_fd);
@@ -166,12 +177,14 @@ int main(int argc, char* argv[]) {
     client_thread_arg->user_table = user_table;
     client_thread_arg->client = client;
     client_thread_arg->ftp_root = ftp_root;
+    client_thread_arg->shutdown_requested = &shutdown_requested;
 
     pthread_t tid;
     if (pthread_create(&tid, NULL, handle_client, client_thread_arg) < 0) {
       perror("Client pthread_create failed.\n");
       close(client_fd);
       free(client);
+      free(client_thread_arg);
       continue;
     }
     

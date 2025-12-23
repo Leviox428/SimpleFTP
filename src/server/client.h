@@ -38,5 +38,6 @@ void handle_list_command(client_t* self);
 void handle_pasv_command(client_t* self);
 void get_user_cwd_relative(client_t* self, char* relative);
 void handle_retr_command(client_t* self, char* file_name);
+void handle_stor_command(client_t* self, char* file_name);
 
 #endif 

@@ -59,15 +59,15 @@ void client_loop(int control_fd) {
   client->transfer_active = 0;
   client->control_fd = control_fd;
   
-  char send_buffer[510];
-  char receive_buffer[512];
+  char send_buffer[CONTROL_BUFFER_SIZE - 2];
+  char receive_buffer[CONTROL_BUFFER_SIZE];
   while (1) {
     printf("> ");
     if (fgets(send_buffer, sizeof(send_buffer), stdin) != NULL) {
-      printf("%s", send_buffer);
       send_line(control_fd, send_buffer);
     }   
     if (!recieve_line(control_fd, receive_buffer, sizeof(receive_buffer))) {
+      printf("end");
       free(client);
       return;
     }
@@ -88,9 +88,9 @@ void client_loop(int control_fd) {
 
       if (strincmp("RETR", send_buffer, 4) == 0) {
 
-        char *filename = NULL;
+        char* filename = NULL;
         filename = send_buffer + strlen("RETR ");
-        char *nl = strchr(filename, '\n');
+        char* nl = strchr(filename, '\n');
         if (nl) *nl = '\0';
 
         int output_fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -99,12 +99,31 @@ void client_loop(int control_fd) {
           perror("Could not create a file");
           continue;
         }
+
+        client->output_fd = output_fd;
+
         pthread_create(&client->data_thread, NULL, data_receive_thread, client);
         pthread_detach(client->data_thread);
         continue;
       }
       
       if (strincmp("STOR", send_buffer, 4) == 0) {
+        char *filename = send_buffer + strlen("STOR ");
+        char *nl = strchr(filename, '\n');
+        if (nl) *nl = '\0';
+
+        int file_fd = open(filename, O_RDONLY);
+        if (file_fd < 0) {
+          perror("Could not open file for upload");
+          close_data_connection(client);
+          continue;
+        }
+
+        client->file_fd = file_fd;
+
+        pthread_create(&client->data_thread, NULL, data_send_thread, client);
+        pthread_detach(client->data_thread);
+        continue;
       }
     }
   }  
@@ -143,16 +162,40 @@ int handle_227(client_t *client, const char *line) {
   return 0;
 }
 
+void* data_send_thread(void* arg) {
+  client_t* client = (client_t*)arg;
+  char buffer[DATA_BUFFER_SIZE] = {0};
+  
+  ssize_t n;
+
+  while ((n = read(client->file_fd, buffer, sizeof(buffer))) > 0) {
+
+    ssize_t sent = 0;
+    while (sent < n) {
+      ssize_t w = write(client->data_fd, buffer + sent, n - sent);
+      if (w <= 0) {
+        goto cleanup;
+      }
+
+      sent += w;
+    }
+  }
+  cleanup:
+    close_data_connection(client);
+    recieve_line(client->control_fd, buffer, sizeof(buffer));
+    return NULL;
+}
+
 void* data_receive_thread(void* arg) {
   client_t* client = (client_t*)arg;
-  char buffer[512];
+  char buffer[DATA_BUFFER_SIZE] = {0};
   ssize_t n;
 
   printf("\n");
   fflush(stdout);
 
   while ((n = read(client->data_fd, buffer, sizeof(buffer))) > 0) {
-      write(client->output_fd, buffer, n);
+    write(client->output_fd, buffer, n);
   }
 
   if (client->output_fd != STDOUT_FILENO) close(client->output_fd);

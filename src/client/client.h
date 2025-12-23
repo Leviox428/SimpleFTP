@@ -6,12 +6,15 @@
 
 #define MAX_USERNAME 32
 #define MAX_PASSWORD 64
+#define CONTROL_BUFFER_SIZE 512
+#define DATA_BUFFER_SIZE 8192
 
 typedef struct {
   int control_fd;
   int data_fd;
   int transfer_active;
   int output_fd;
+  int file_fd;
   pthread_t data_thread;
 } client_t;
 
@@ -19,7 +22,8 @@ void client_loop(int control_fd);
 int client_connect(int control_fd);
 void send_command(int fd, const char* cmd, const char* arg);
 int handle_227(client_t* client, const char* line);
-void *data_receive_thread(void *arg);
+void* data_receive_thread(void* arg);
+void* data_send_thread(void* arg);
 void close_data_connection(client_t* self);
 #endif
 

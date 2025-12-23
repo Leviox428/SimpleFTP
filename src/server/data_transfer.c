@@ -169,3 +169,42 @@ void* retr_transfer(void* arg) {
     return NULL;
 }
 
+void* stor_transfer(void* arg) {
+  file_transfer_arg_t* file_arg = (file_transfer_arg_t*)arg;
+  client_t* client = file_arg->client;
+
+  int data_fd = open_data_transfer(client);
+  if (data_fd == -1) {
+    send_response(client->socket_fd, "550", "Couldn't start data transfer");
+    goto cleanup;
+  }
+
+  char buf[8192];
+  ssize_t n;
+
+  while ((n = read(data_fd, buf, sizeof(buf))) > 0) {
+    if (client->abort_requested) {
+      break;
+    }
+
+    ssize_t written = 0;
+    while (written < n) {
+      if (client->abort_requested) {
+        break;
+      }
+
+      ssize_t w = write(client->file_fd, buf + written, n - written);
+      if (w <= 0) {
+        goto cleanup;
+      }
+
+      written += w;
+    }
+  }
+
+  cleanup:
+    close_data_transfer(file_arg->client);
+    free(file_arg);
+    return NULL;
+}
+

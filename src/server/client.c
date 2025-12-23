@@ -112,6 +112,32 @@ int process_command(client_t* self, const char* buffer) {
     return 0;
   }
 
+  if (!stricmp(cmd, "STOR")) {
+    if (arg[0] == '\0') {
+      send_response(self->socket_fd, "550", "RETR requires a file name argument");
+      return 0;
+    }
+
+    if (self->pasv_fd == -1) {
+      send_response(self->socket_fd, "550", "Pasv socket not listening use PASV first");
+      return 0;
+    }
+
+    handle_stor_command(self, arg);
+    return 0;
+  }
+
+  if (!stricmp(cmd, "ABOR")) {
+    pthread_mutex_lock(&self->mutex);
+    if (!self->transfer_active) {
+      send_response(self->socket_fd, "550", "No data transfer active");
+      pthread_mutex_unlock(&self->mutex);
+      return 0;
+    }
+
+    self->abort_requested = 1;
+  }
+
   send_response(self->socket_fd, "550", "Unknown command");
   return 0;
 }
@@ -331,6 +357,39 @@ void handle_retr_command(client_t *self, char *file_name) {
 
   pthread_create(&retr_thread, NULL, retr_transfer, file_arg);
   pthread_detach(retr_thread);
+}
+
+void handle_stor_command(client_t *self, char *file_name) {
+   char file_path[PATH_MAX];
+  
+  pthread_mutex_lock(&self->mutex);
+  if (self->transfer_active) {
+    send_response(self->socket_fd, "550", "You must wait for other transfer to end");
+    pthread_mutex_unlock(&self->mutex);
+    return;
+  }
+  pthread_mutex_unlock(&self->mutex);
+
+  snprintf(file_path, sizeof(file_path), "%s/%s", self->cwd, file_name);
+
+  int fd = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (fd < 0) {
+    send_response(self->socket_fd, "550", "Cannot create file");
+    return;
+  }
+
+  pthread_mutex_lock(&self->mutex);
+  self->transfer_active = 1;
+  self->file_fd = fd;
+  pthread_mutex_unlock(&self->mutex);
+
+  pthread_t stor_thread;
+  file_transfer_arg_t *file_arg = malloc(sizeof(file_transfer_arg_t));
+  strcpy(file_arg->file_path, file_path);
+  file_arg->client = self;
+
+  pthread_create(&stor_thread, NULL, stor_transfer, file_arg);
+  pthread_detach(stor_thread);
 }
 
 void terminate_connection(client_t *self) {

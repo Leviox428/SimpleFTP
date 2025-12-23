@@ -13,4 +13,5 @@ int open_data_transfer(client_t* client);
 void close_data_transfer(client_t* client);
 void* list_transfer(void* arg);
 void* retr_transfer(void* arg);
+void* stor_transfer(void* arg);
 #endif

@@ -75,10 +75,11 @@ void* handle_client(void* arg) {
 
   send_response(client_arg->client->socket_fd, "230", "User logged in, proceed");
 
-  char buffer[512];
-  while (!client_arg->shutdown_requested) {
+  char buffer[512] = {0};
+  while (!*(client_arg->shutdown_requested)) {
     if (!receive_line(client_arg->client, buffer, sizeof(buffer))) 
       break;
+    
     
     int user_quit = process_command(client_arg->client, buffer);
     if (user_quit)

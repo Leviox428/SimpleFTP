@@ -1,4 +1,5 @@
 #include "ftp_utils.h"
+#include "client.h"
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -21,7 +22,7 @@ int recieve_line(int fd, char *buffer, size_t buffer_size) {
 
 void send_line(int fd, char *line) {
   line[strcspn(line, "\n")] = '\0';
-  char buffer[512];
+  char buffer[CONTROL_BUFFER_SIZE];
 
   snprintf(buffer, sizeof(buffer), "%s\r\n", line);
   send(fd, buffer, strlen(buffer), 0);
