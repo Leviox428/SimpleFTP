@@ -46,6 +46,8 @@ void* scan_clients(void* arg) {
 }
 
 int main(int argc, char* argv[]) {
+  int return_code = 0;
+
   int port = 2121;
   char* root = "users";
   if (argc == 3) {
@@ -62,14 +64,15 @@ int main(int argc, char* argv[]) {
   char* ftp_root = malloc(PATH_MAX);
   if (!ftp_root) {
     perror("malloc ftp_root failed");
-    return 1;
+    return_code = 1;
+    goto cleanup;
   }
 
   struct passwd *pw = getpwuid(getuid());
   if (!pw) {
     perror("Error getting FTP root.");
-    free(ftp_root);
-    return 2;
+    return_code = 2;
+    goto cleanup;
   }
 
   snprintf(ftp_root, PATH_MAX, "%s/Semestralka/%s", pw->pw_dir, root);
@@ -78,8 +81,8 @@ int main(int argc, char* argv[]) {
   if (stat(ftp_root, &st) == -1) {
     if (mkdir(ftp_root, 0755) == -1) {
       perror("mkdir failed to create root folder");
-      free(ftp_root);
-      return 3;
+      return_code = 3;
+      goto cleanup;
     }
   }
 
@@ -88,8 +91,8 @@ int main(int argc, char* argv[]) {
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
     perror("error creating main socket");
-    free(ftp_root);
-    return 4;
+    return_code = 4;
+    goto cleanup;
   }
   
   // can reuse port
@@ -105,23 +108,21 @@ int main(int argc, char* argv[]) {
 
   if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
     perror("binding socket to the port failed");
-    close(server_fd);
-    free(ftp_root);  
-    return 5;
+    return_code = 5;
+    goto cleanup;
   }
   
   // sets main socket as passive
   if (listen(server_fd, 10) < 0) {
     perror("error setting main socket into passive mode");
-    close(server_fd);
-    free(ftp_root);
-    return 6;
+    return_code = 6;
+    goto cleanup;
   }
 
   printf("FTP server listening on port %d...\n", port);
   printf("FTP root is: %s\n", ftp_root);
   
-  user_table_t* user_table = malloc(sizeof(user_table_t));
+  user_table_t* user_table = calloc(1, sizeof(user_table_t));
   init_user_table(user_table);
   //for testing only
   add_user("test", "123", user_table);
@@ -137,7 +138,7 @@ int main(int argc, char* argv[]) {
   }
   pthread_detach(console_thread);
   
-  active_client_registry_t* client_registry = malloc(sizeof(active_client_registry_t));
+  active_client_registry_t* client_registry = calloc(1, sizeof(active_client_registry_t));
   init_client_registry(client_registry);
   
   pthread_t scanner_thread;
@@ -193,14 +194,24 @@ int main(int argc, char* argv[]) {
   }
 
   cleanup:
+    printf("Cleaning up.\n");
     if (client_registry) {
       clear_client_registry(client_registry);
       free(client_registry);
-    }    
-    clear_user_table(user_table);
-    free(user_table);
-    close(server_fd);
-    free(ftp_root);
+    } 
+    if (user_table) {
+      clear_user_table(user_table);
+      free(user_table);
+    }
+    if (ftp_root) {
+      free(ftp_root);
+    }
+    if (server_fd > 0) {
+      close(server_fd);
+    }
+    if (c_arg) {
+      free(c_arg);
+    }
 
-  return 0;
+  return return_code;
 }

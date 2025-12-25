@@ -56,7 +56,7 @@ void clear_client_registry(active_client_registry_t *self) {
       terminate_connection(client);
     }
   }
-
+  free(self->clients);
   pthread_mutex_unlock(&self->mutex);
   pthread_mutex_destroy(&self->mutex);
 }

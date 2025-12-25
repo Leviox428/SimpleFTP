@@ -24,8 +24,6 @@ user_t* handle_connection(client_t *client, user_table_t *user_table, active_cli
 
     user = find_user(buffer, user_table);
     if (user == NULL) {
-      printf("not found");
-      fflush(stdout);
       send_response_fmt(client->socket_fd, "530", "User %s doesn't exit, try again", buffer);
       continue;
     }

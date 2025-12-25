@@ -6,7 +6,7 @@
 
 void* console_manager_thread(void* arg) {
   console_arg_t* c_arg = (console_arg_t*)arg;
-  while (!c_arg->shutdown_requested) {
+  while (!*(c_arg->shutdown_requested)) {
     char command_buffer[256];
     printf("> ");
     fflush(stdout);
@@ -55,6 +55,5 @@ void* console_manager_thread(void* arg) {
       fflush(stdout);
     }
   }
-  free(c_arg);
   return NULL;
 }

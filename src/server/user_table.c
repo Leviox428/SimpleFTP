@@ -18,7 +18,7 @@ unsigned int hash_username(const char *username) {
   return hash % USER_TABLE_CAPACITY;
 }
 
-int add_user(const char *username, const char *password, user_table_t* self) {
+int add_user(const char* username, const char* password, user_table_t* self) {
   if (self->user_count == USER_TABLE_CAPACITY) {
     printf("Cannt add user, the user table is full\n.");
     fflush(stdout);
@@ -60,11 +60,11 @@ user_t* find_user(const char* username, user_table_t* self) {
   return NULL;
 }
 
-int remove_user(const char *username, user_table_t *self) {
+int remove_user(const char* username, user_table_t* self) {
   unsigned int idx = hash_username(username);
   pthread_mutex_lock(&self->mutex);
   
-  user_t *u = self->users[idx];
+  user_t* u = self->users[idx];
   while (u) {
     if (strcmp(u->username, username) == 0) {
       *u->pprev = u->next;

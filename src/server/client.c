@@ -396,6 +396,7 @@ void handle_stor_command(client_t *self, char *file_name) {
 
 void terminate_connection(client_t *self) {
   close(self->socket_fd);
+  pthread_mutex_destroy(&self->mutex);
   free(self);
 }
 
