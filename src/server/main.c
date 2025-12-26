@@ -75,9 +75,22 @@ int main(int argc, char* argv[]) {
     goto cleanup;
   }
 
-  snprintf(ftp_root, PATH_MAX, "%s/Semestralka/%s", pw->pw_dir, root);
+  
+  char base_dir[PATH_MAX];
+  snprintf(base_dir, PATH_MAX, "%s/Semestralka", pw->pw_dir);
 
   struct stat st = {0};
+
+  if (stat(base_dir, &st) == -1) {
+    if (mkdir(base_dir, 0755) == -1) {
+      perror("mkdir failed to create Semestralka");
+      return_code = 3;
+      goto cleanup;
+    }
+  }
+
+  snprintf(ftp_root, PATH_MAX, "%s/%s", base_dir, root);
+
   if (stat(ftp_root, &st) == -1) {
     if (mkdir(ftp_root, 0755) == -1) {
       perror("mkdir failed to create root folder");
